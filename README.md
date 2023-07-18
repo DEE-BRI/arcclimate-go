@@ -16,13 +16,13 @@ Note1: Remote islands such as Okinotori-shima (southernmost point: 20.42°N, 136
 For Ubuntu/Debian user
 ```
 sudo apt install golang # if you didnot install golang
-go install github.com/udawtr/arcclimate-go@latest
+go install github.com/DEE-BRI/arcclimate-go@latest
 ~/go/bin/arcclimate-go 33.8834976 130.8751773 --mode EA -o test.csv
 ```
 
 For Windows user
 ```
-go install github.com/udawtr/arcclimate-go@latest
+go install github.com/DEE-BRI/arcclimate-go@latest
 arcclimate-go 33.8834976 130.8751773 --mode EA -o test.csv
 ```
 
@@ -30,7 +30,7 @@ arcclimate-go 33.8834976 130.8751773 --mode EA -o test.csv
 
 Install
 ```
-go get github.com/udawtr/arcclimate-go/arcclimate
+go get github.com/DEE-BRI/arcclimate-go/arcclimate
 ```
 
 Edit main.go
@@ -41,7 +41,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/udawtr/arcclimate-go/arcclimate"
+	"github.com/DEE-BRI/arcclimate-go/arcclimate"
 )
 
 func main() {
