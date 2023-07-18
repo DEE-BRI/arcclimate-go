@@ -72,5 +72,5 @@ ArcClimate Development Team
 
 ## License
 
-Distributed under the MIT License.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
