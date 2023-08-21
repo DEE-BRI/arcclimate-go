@@ -20,11 +20,8 @@ go install github.com/DEE-BRI/arcclimate-go@latest
 ~/go/bin/arcclimate-go 33.8834976 130.8751773 --mode EA -o test.csv
 ```
 
-For Windows user
-```
-go install github.com/DEE-BRI/arcclimate-go@latest
-arcclimate-go 33.8834976 130.8751773 --mode EA -o test.csv
-```
+For Windows users, read the guide for Windows([English](USER_GUIDE_WINDOWS.md) or [日本語](USER_GUIDE_WINDOWS.ja.md)).
+
 
 ## Using as library
 
