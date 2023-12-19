@@ -163,9 +163,24 @@ func (df *MsmTarget) ToHAS(out *bytes.Buffer) {
 //
 // Note:
 //
-//	"EnergyPlus Auxilary Programs"を参考に記述されました。
-//	外気温(単位:℃)、風向(単位:°)、風速(単位:m/s)、降水量の積算値(単位:mm/h)のみを出力します。
-//	それ以外の値については、"missing"に該当する値を出力します。
+//		"EnergyPlus Auxilary Programs"を参考に記述されました。
+//		以下の値を出力します。それ以外の値については、"missing"に該当する値を出力します。
+//		- N1: Year
+//	 - N2: Month
+//	 - N3: Day
+//	 - N4: Hour
+//	 - N5: Minute
+//	 - N6: Dry Bulb Temperature [C]
+//	 - N7: Dew Point Temperature [C]
+//	 - N8: Relative Humidity [%]
+//	 - N9: Atmospheric Station Pressure [Pa]
+//	 - N13: Horizontal Infrared Radiation from Sky [Wh/m2]
+//	 - N14: Global Horizontal Radiation [Wh/m2]
+//	 - N15: Direct Normal Radiation [Wh/m2]
+//	 - N16: Diffuse Horizontal Radiation [Wh/m2]
+//	 - N20: Wind Direction [degrees]
+//	 - N21: Wind Speed [m/s]
+//	 - N33: Liquid Precipitation Depth [mm/h]
 func (msm *MsmTarget) ToEPW(out *bytes.Buffer, lat float64, lon float64) {
 
 	// LOCATION
@@ -203,13 +218,37 @@ func (msm *MsmTarget) ToEPW(out *bytes.Buffer, lat float64, lon float64) {
 		// N3: 日
 		// N4: 時
 		// N5: 分 = 0
-		// N6: Dry Bulb Temperature
-		// N7-N19: missing
-		// N20: w_dir
-		// N21: w_spd
+		// N6: Dry Bulb Temperature [deg C]
+		// N7: Dew Point Temperature [deg C]
+		// N8: Relative Humidity [%]
+		// N9: Atmospheric Station Pressure [Pa]
+		// N10-N11: missing
+		// N12: Horizontal Infrared Radiation from Sky [Wh/m2]
+		// N13: Global Horizontal Radiation [Wh/m2]
+		// N14: Direct Normal Radiation [Wh/m2]
+		// N15: Diffuse Horizontal Radiation [Wh/m2]
+		// N20: Wind Direction [degree]
+		// N21: Wind Speed [m/s]
 		// N22-N32: missing
-		// N33: APCP01
+		// N33: Liquid Precipitation Depth [mm]
 		// N34: missing
-		out.Write([]byte(fmt.Sprintf("%d,%d,%d,%d,60,-,%.1f,99.9,999,999999,999,9999,9999,9999,9999,9999,999999,999999,999999,9999,%d,%.1f,99,99,9999,99999,9,999999999,999,0.999,999,99,999,%.1f,99\n", msm.date[i].Year(), msm.date[i].Month(), msm.date[i].Day(), msm.date[i].Hour()+1, msm.TMP[i], int(msm.W_dir[i]), msm.W_spd[i], msm.APCP01[i])))
+		// ---------------------------N1 N2 N3 N4 N5 A1N6   N7   N8   N9 N10 N11 N12N13N14N15 N16    N17    N18    N19  N20 N21N22N23 N24  N25 N26 N27       N28 N29   N30N31 N32 N33 N34
+		out.Write([]byte(fmt.Sprintf("%d,%d,%d,%d,60,-,%.1f,%.1f,%.1f,%d,999,9999,%d,%d,%d,%d,999999,999999,999999,9999,%d,%.1f,99,99,9999,99999,9,999999999,999,0.999,999,99,999,%.1f,99\n",
+			msm.date[i].Year(),             // N1
+			msm.date[i].Month(),            // N2
+			msm.date[i].Day(),              // N3
+			msm.date[i].Hour()+1,           // N4
+			msm.TMP[i],                     // N6
+			msm.DT[i],                      // N7
+			msm.RH[i],                      // N8
+			int(msm.PRES[i]),               // N9
+			int(msm.Ld[i]*1000/3.6),        // N13
+			int(msm.DSWRF_est[i]*1000/3.6), // N14
+			int(msm.SR_est[i].DN*1000/3.6), // N15
+			int(msm.SR_est[i].SH*1000/3.6), // N16
+			int(msm.W_dir[i]),              // N20
+			msm.W_spd[i],                   // N21
+			msm.APCP01[i],                  // N33
+		)))
 	}
 }
