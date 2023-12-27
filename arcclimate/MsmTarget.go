@@ -17,7 +17,7 @@ type MsmTarget struct {
 	Ld        []float64 //6.大気放射量 W/m2 or MJ/m2
 	VGRD      []float64 //7.南北風(V軸) (単位:m/s)
 	UGRD      []float64 //8.東西風(U軸) (単位:m/s)
-	PRES      []float64 //9.気圧 (単位:hPa)
+	PRES      []float64 //9.気圧 (単位:Pa)
 	APCP01    []float64 //10.参照時刻の前1時間の降水量の積算値 (単位:mm/h)
 
 	DSWRF []float64 //標準年の計算時に使用するDSWRF
