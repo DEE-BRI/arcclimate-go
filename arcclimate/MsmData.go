@@ -20,7 +20,7 @@ type MsmDataRow struct {
 	Ld        float64   `csv:"Ld"`                  //参照時刻の前1時間の下向き大気放射量の積算値 (単位:MJ/m2)
 	VGRD      float64   `csv:"VGRD"`                //南北風(V軸) (単位:m/s)
 	UGRD      float64   `csv:"UGRD"`                //東西風(U軸) (単位:m/s)
-	PRES      float64   `csv:"PRES"`                //気圧 (単位:hPa)
+	PRES      float64   `csv:"PRES"`                //気圧 (単位:Pa)
 	APCP01    float64   `csv:"APCP01"`              //参照時刻の前1時間の降水量の積算値 (単位:mm/h)
 }
 
@@ -79,7 +79,7 @@ func CorrectTMP(TMP float64, ele_gap float64) float64 {
 // 気圧
 //--------------------------------------
 
-// 気圧 PRES [hPa] を 標高差 ele_gap [m] と 気温 TMP [℃]を用いて補正します。
+// 気圧 PRES [Pa] を 標高差 ele_gap [m] と 気温 TMP [℃]を用いて補正します。
 // ただし、気温減率の平均値を0.0065℃/mとします。
 func CorrectPRES(PRES float64, ele_gap float64, TMP float64) float64 {
 	return PRES * math.Pow(1-((ele_gap*0.0065)/(TMP+273.15)), 5.257)
@@ -89,7 +89,7 @@ func CorrectPRES(PRES float64, ele_gap float64, TMP float64) float64 {
 // 重量絶対湿度の計算
 //--------------------------------------
 
-// 重量絶対湿度 MR [g/kg(DA)] を 気温 TMP [℃] と 気圧 PRES [hPa] を用いて補正します。
+// 重量絶対湿度 MR [g/kg(DA)] を 気温 TMP [℃] と 気圧 PRES [Pa] を用いて補正します。
 func CorrectMR(MR float64, TMP float64, PRES float64) float64 {
 	//  飽和水蒸気量（重量絶対湿度） [g/kg(DA)]
 	MR_sat := mixingRatio(PRES, TMP)
@@ -100,7 +100,7 @@ func CorrectMR(MR float64, TMP float64, PRES float64) float64 {
 	return MR_corr
 }
 
-// 気圧 PRES [hPa] と 気温 TMP [℃] から 重量絶対湿度 [g/kg(DA)] を求める。
+// 気圧 PRES [Pa] と 気温 TMP [℃] から 重量絶対湿度 [g/kg(DA)] を求める。
 func mixingRatio(PRES float64, TMP float64) float64 {
 	// 絶対温度 [K]
 	T := TMP + 273.15
@@ -112,12 +112,14 @@ func mixingRatio(PRES float64, TMP float64) float64 {
 	aT := aT(eSAT, T)
 
 	// 重量絶対湿度 [g/kg(DA)]
-	MR := aT / ((PRES / 100) / (2.87 * T))
+	// ここで、2.87は乾燥空気の気体定数
+	MR := aT / (PRES / (287 * T))
 
 	return MR
 }
 
 // 絶対温度 T [K] から 飽和水蒸気圧 [hPa] を求める。
+// Wagner の式を用いています。
 func eSAT(T float64) float64 {
 	return math.Exp(-5800.2206/T+
 		1.3914993-0.048640239*T+

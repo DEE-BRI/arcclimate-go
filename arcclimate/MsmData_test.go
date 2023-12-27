@@ -11,27 +11,27 @@ func Test_CorrectMR(t *testing.T) {
 	// 温度 [C]
 	TMP := 20.0
 
-	// 気圧 [hPa]
-	PRES := 1013.25
+	// 気圧 [Pa]
+	PRES := 101325.0
 
 	// 重量絶対湿度 [g/kg(DA)]
 	MR_sat := mixingRatio(PRES, TMP)
-	assert.InDelta(t, 1437.53, MR_sat, 0.01)
+	assert.InDelta(t, 14.3753, MR_sat, 0.0001)
 
 	// 重量絶対湿度の標高補正1
-	// 1437.53 < 8300 なので、 補正結果は 1437.53
-	MR_corr := CorrectMR(8300.0, TMP, PRES)
-	assert.InDelta(t, 1437.53, MR_corr, 0.01)
+	// 14.3753 < 83 なので、 補正結果は 14.3753
+	MR_corr := CorrectMR(83.0, TMP, PRES)
+	assert.InDelta(t, 14.3753, MR_corr, 0.0001)
 
 	// 重量絶対湿度の標高補正2
-	// 1437 .53 > 300.0 なので、 補正結果は 300.0
-	MR_corr = CorrectMR(300.0, TMP, PRES)
-	assert.InDelta(t, 300.0, MR_corr, 0.01)
+	// 14.3753 > 10.0 なので、 補正結果は 10.0
+	MR_corr = CorrectMR(10.0, TMP, PRES)
+	assert.InDelta(t, 10.0, MR_corr, 0.0001)
 }
 
 func Test_mixingRatio(t *testing.T) {
-	// 気圧 [hPa]
-	PRES := 1013.25
+	// 気圧 [Pa]
+	PRES := 1013025.0
 
 	// 絶対温度 [K]
 	T := 293.15
