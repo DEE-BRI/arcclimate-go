@@ -8,7 +8,7 @@ import (
 // MSMファイルから読み取ったデータ
 type MsmData struct {
 	name string //ファイル名
-	Rows *[87687]MsmDataRow
+	Rows []MsmDataRow
 }
 
 type MsmDataRow struct {

@@ -4,6 +4,7 @@ package arcclimate
 import (
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/hhkbp2/go-logging"
@@ -35,7 +36,7 @@ func Interpolate(
 	msmList := RequiredMsmList(lat, lon)
 
 	// MSMファイルの読込 (0.2s; 4 MSM from cache)
-	msms := LoadMsmFiles(msmList, useCache, saveCache, msmFileDir)
+	msms := LoadMsmFiles(msmList, startYear, useCache, saveCache, msmFileDir)
 
 	log.Printf("補正計算")
 
@@ -147,6 +148,10 @@ func (msms *MsmDataSet) PrportionalDivided(
 	msm_NW := msms.Data[2].CorrectedMsm_TMP_PRES_MR(elevations[2], ele_target)
 	msm_NE := msms.Data[3].CorrectedMsm_TMP_PRES_MR(elevations[3], ele_target)
 
+	// 4隅のMSMデータの日付範囲を揃える
+	// (メッシュ間でデータ更新のタイミングがずれる等により、4隅の収録期間が一致しないケースに備えた保険)
+	msm_SW, msm_SE, msm_NW, msm_NE = alignMsmCornersByDate(msm_SW, msm_SE, msm_NW, msm_NE)
+
 	// 重みづけによる按分
 	l := msm_SW.Length()
 	w_SW, w_SE, w_NW, w_NE := weights[0], weights[1], weights[2], weights[3]
@@ -181,6 +186,61 @@ func (msms *MsmDataSet) PrportionalDivided(
 	}
 
 	return &msm_target
+}
+
+// alignMsmCornersByDate は周囲4地点(SW,SE,NW,NE)のMSMデータの日付範囲を揃えます。
+// 通常は4地点とも同一のデータソース・同一期間から読み込まれるため範囲は一致しますが、
+// メッシュ間で収録期間が一致しないケースに備え、共通する日付範囲にRowsを揃えることで
+// インデックスを用いた按分処理(PrportionalDivided)での日付ズレやindex out of rangeを防ぐ。
+func alignMsmCornersByDate(sw, se, nw, ne *MsmData) (*MsmData, *MsmData, *MsmData, *MsmData) {
+	corners := [4]*MsmData{sw, se, nw, ne}
+
+	aligned := true
+	for _, c := range corners[1:] {
+		if len(c.Rows) != len(corners[0].Rows) || !c.Rows[0].date.Equal(corners[0].Rows[0].date) {
+			aligned = false
+			break
+		}
+	}
+	if aligned {
+		return sw, se, nw, ne
+	}
+
+	// 4隅に共通する日付範囲(重複区間)を求める
+	start := corners[0].Rows[0].date
+	end := corners[0].Rows[len(corners[0].Rows)-1].date
+	for _, c := range corners[1:] {
+		if c.Rows[0].date.After(start) {
+			start = c.Rows[0].date
+		}
+		cEnd := c.Rows[len(c.Rows)-1].date
+		if cEnd.Before(end) {
+			end = cEnd
+		}
+	}
+
+	log.Printf("MSM4地点のデータ範囲が一致しないため、共通期間(%s〜%s)に揃えます", start, end)
+
+	aligned_corners := [4]*MsmData{}
+	for i, c := range corners {
+		aligned_corners[i] = &MsmData{
+			name: c.name,
+			Rows: sliceMsmRowsByDate(c.Rows, start, end),
+		}
+	}
+
+	return aligned_corners[0], aligned_corners[1], aligned_corners[2], aligned_corners[3]
+}
+
+// sliceMsmRowsByDate は rows のうち start〜end(両端含む)の範囲に該当する行を返します。
+func sliceMsmRowsByDate(rows []MsmDataRow, start time.Time, end time.Time) []MsmDataRow {
+	start_index := sort.Search(len(rows), func(i int) bool {
+		return rows[i].date.After(start) || rows[i].date.Equal(start)
+	})
+	end_index := sort.Search(len(rows), func(i int) bool {
+		return rows[i].date.After(end)
+	})
+	return rows[start_index:end_index]
 }
 
 // 大気放射量 Ld の単位をW/m2からMJ/m2に換算
