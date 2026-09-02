@@ -152,7 +152,7 @@ func (df *MsmTarget) ToHAS(out *bytes.Buffer) {
 
 		// 風速 (0.1m/s)
 		for h := 0; h < 24; h++ {
-			w_spd := int(df.W_dir[off+h] * 10)
+			w_spd := int(df.W_spd[off+h] * 10)
 			out.Write([]byte(fmt.Sprintf("%3d", w_spd)))
 		}
 		out.Write([]byte(fmt.Sprintf("%s7\n", day_signature)))
