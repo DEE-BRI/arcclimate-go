@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 )
 
 // CSV形式
@@ -92,6 +93,15 @@ func (df_save *MsmTarget) ToCSV(buf *bytes.Buffer) {
 	}
 }
 
+// haspWeekday は HASP 形式の曜日番号（日1,月2,...,土7）を返します。
+//
+// Python 版 ArcClimate は pandas の weekday（月0,...,日6）に 2 を足し、
+// 8 を 1 に置き換えています。Go の time.Weekday は日曜始まり（日0,...,土6）
+// なので、1 を足すと同じ値になります。
+func haspWeekday(t time.Time) int {
+	return int(t.Weekday()) + 1
+}
+
 // HASP形式
 //
 // Note:
@@ -106,10 +116,7 @@ func (df *MsmTarget) ToHAS(out *bytes.Buffer) {
 		year := df.date[off].Year() % 100
 		month := df.date[off].Month()
 		day := df.date[off].Day()
-		weekday := df.date[off].Weekday() + 2 // 月2,...,日8
-		if weekday == 8 {                     // 日=>1
-			weekday = 1
-		}
+		weekday := haspWeekday(df.date[off])
 		// 注)祝日は処理していない
 
 		// 2列	2列	2列	1列
