@@ -54,7 +54,7 @@ func main() {
 
 	msmFileDir := parser.String("", "msm_file_dir", &argparse.Options{
 		Default: ".msm_cache",
-		Help:    "MSMファイルの格納ディレクトリ"})
+		Help:    "MSMファイルのキャッシュディレクトリ。キャッシュがあれば読み込み、無ければダウンロードして保存する"})
 
 	modeSep := parser.Selector("", "mode_separate", []string{"Nagata", "Watanabe", "Erbs", "Udagawa", "Perez"}, &argparse.Options{
 		Default: "Perez",
@@ -64,9 +64,6 @@ func main() {
 	if err != nil {
 		fmt.Print(parser.Usage(err))
 	}
-
-	// MSMフォルダの作成
-	// os.MkdirAll(*msmFileDir, os.ModePerm)
 
 	// EA方式かつ日射量の推計値を使用しない場合に開始年が2018年以上となっているか確認
 	if *mode == "EA" {
@@ -91,8 +88,8 @@ func main() {
 		*mode,
 		!*disableEst,
 		*modeSep,
-		false,
-		false,
+		true, // useCache
+		true, // saveCache
 		*msmFileDir,
 	)
 

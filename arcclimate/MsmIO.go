@@ -34,7 +34,7 @@ func LoadMsmFiles(msm_list []string, startYear int, useCache bool, saveCache boo
 
 	// 保存先ディレクトリの作成
 	if useCache || saveCache {
-		os.Mkdir(msm_file_dir, os.ModePerm)
+		os.MkdirAll(msm_file_dir, os.ModePerm)
 	}
 
 	// MSMファイル読み込み
