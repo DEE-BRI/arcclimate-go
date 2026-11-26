@@ -12,8 +12,13 @@ import (
 	"time"
 )
 
+// MSMデータセット名（配布元のディレクトリ名。収録期間を表す）。
+// キャッシュもこの名前のサブディレクトリに分けて保存し、データセットが新しい期間に
+// 切り替わったときに古い期間のキャッシュを読まないようにする。
+const msmDataset = "msm_2011_2025"
+
 // MSMデータ配布元（Parquet形式）
-const newMsmURLBase = "https://arcclimate-ja.s3.ap-northeast-1.wasabisys.com/msm_2011_2025/"
+const newMsmURLBase = "https://arcclimate-ja.s3.ap-northeast-1.wasabisys.com/" + msmDataset + "/"
 
 // """MSMファイルを読み込みます。必要に応じてダウンロードを行います。
 // Args:
@@ -22,7 +27,8 @@ const newMsmURLBase = "https://arcclimate-ja.s3.ap-northeast-1.wasabisys.com/msm
 //	lon(float64): 推計対象地点の経度（10進法）
 //	startYear(int): 検討期間の開始年。この年より前のデータは、EA計算の月接合(前年12/31 18時分)に
 //	                必要な分を除いて読み捨てます。
-//	msm_file_dir(str): MSMファイルの格納ディレクトリ
+//	msm_file_dir(str): MSMファイルのキャッシュディレクトリ。実際のファイルは
+//	                   <msm_file_dir>/<データセット名>/<MSM名>.parquet に置かれます。
 //
 // Returns:
 //
@@ -32,9 +38,14 @@ const newMsmURLBase = "https://arcclimate-ja.s3.ap-northeast-1.wasabisys.com/msm
 func LoadMsmFiles(msm_list []string, startYear int, useCache bool, saveCache bool, msm_file_dir string) MsmDataSet {
 	// 計算に必要なMSMを算出して、ダウンロード⇒ファイルpathをリストで返す
 
-	// 保存先ディレクトリの作成
-	if useCache || saveCache {
-		os.MkdirAll(msm_file_dir, os.ModePerm)
+	cacheDir := msmCacheDir(msm_file_dir)
+
+	// 保存先ディレクトリの作成。作れない場合もキャッシュを保存しないだけで計算は続ける
+	if saveCache {
+		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			log.Printf("警告: MSMキャッシュディレクトリを作成できないため、キャッシュを保存しません: %v", err)
+			saveCache = false
+		}
 	}
 
 	// MSMファイル読み込み
@@ -44,7 +55,7 @@ func LoadMsmFiles(msm_list []string, startYear int, useCache bool, saveCache boo
 		// MSMファイルのパス
 		// MSMファイル読み込み
 		// 負の日射量が存在した際に日射量を0とする
-		go load_msm(index, msm_file_dir, msm, c, startYear, useCache, saveCache, msm_file_dir)
+		go load_msm(index, cacheDir, msm, c, startYear, useCache, saveCache)
 	}
 
 	for i := 0; i < len(msm_list); i++ {
@@ -64,16 +75,30 @@ type MsmAndIndex struct {
 // msmParquetFloatColumns は新MSM Parquetファイルのfloat32列(date以外)の一覧
 var msmParquetFloatColumns = []string{"TMP", "MR", "DSWRF_est", "DSWRF_msm", "Ld", "VGRD", "UGRD", "PRES", "APCP01"}
 
-func load_msm(index int, msm_file_dir string, msm string, c chan MsmAndIndex, startYear int, useCache bool, saveCache bool, output_dir string) {
-	parquet_path := filepath.Join(msm_file_dir, fmt.Sprintf("%s.parquet", msm))
+// msmCacheDir はキャッシュの実際の保存先 <msm_file_dir>/<データセット名> を返します。
+func msmCacheDir(msm_file_dir string) string {
+	return filepath.Join(msm_file_dir, msmDataset)
+}
+
+func load_msm(index int, cacheDir string, msm string, c chan MsmAndIndex, startYear int, useCache bool, saveCache bool) {
+	parquet_path := filepath.Join(cacheDir, fmt.Sprintf("%s.parquet", msm))
 
 	var rows []MsmDataRow
+	loaded := false
 
 	if useCache && fileExists(parquet_path) {
 		log.Printf("MSMファイル読み込み: %s", parquet_path)
-		rows = readCachedParquetMsm(parquet_path)
-	} else {
-		rows = downloadMsm(msm, output_dir, saveCache)
+		var err error
+		rows, err = readCachedParquetMsm(parquet_path)
+		if err != nil {
+			// 壊れたキャッシュ（途中までしか書かれていない等）は読み捨てて取り直す
+			log.Printf("警告: MSMキャッシュを読めないため再ダウンロードします: %s: %v", parquet_path, err)
+		} else {
+			loaded = true
+		}
+	}
+	if !loaded {
+		rows = downloadMsm(msm, parquet_path, saveCache)
 	}
 
 	// startYearより古いデータを読み捨てる。ただし、EA計算では1月の代表年がstartYearになる
@@ -98,17 +123,53 @@ func trimRowsBefore(rows []MsmDataRow, cutoff time.Time) []MsmDataRow {
 }
 
 // readCachedParquetMsm はローカルにキャッシュされたParquetファイルを読み込みます。
-func readCachedParquetMsm(path string) []MsmDataRow {
+// 読めない・壊れている場合は panic せずエラーを返します。
+func readCachedParquetMsm(path string) (rows []MsmDataRow, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatal(err)
-		panic(err)
+		return nil, err
 	}
-	return parseParquetMsm(data)
+	// Parquetリーダーは不正なファイル（末尾が欠けたもの等）で panic するため、エラーに変換する
+	defer func() {
+		if r := recover(); r != nil {
+			rows, err = nil, fmt.Errorf("Parquetファイルが不正です: %v", r)
+		}
+	}()
+	return parseParquetMsm(data), nil
 }
 
-// downloadMsm はMSMデータをダウンロードします。
-func downloadMsm(msm string, output_dir string, saveCache bool) []MsmDataRow {
+// writeFileAtomic は同じディレクトリの一時ファイルに書いてから名前を変えることで、
+// 書き込み途中のファイルが path に現れないようにします。
+// 中断や同時実行があっても、path には完全なファイルだけが置かれます。
+func writeFileAtomic(path string, data []byte) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		if err != nil {
+			tmp.Close()
+			os.Remove(tmpName)
+		}
+	}()
+	if _, err = tmp.Write(data); err != nil {
+		return err
+	}
+	if err = tmp.Sync(); err != nil {
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	if err = os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+// downloadMsm はMSMデータをダウンロードします。saveCache が true なら save_path に保存します。
+func downloadMsm(msm string, save_path string, saveCache bool) []MsmDataRow {
 	url := fmt.Sprintf("%s%s.parquet", newMsmURLBase, msm)
 	log.Printf("MSMダウンロード %s", url)
 
@@ -128,10 +189,10 @@ func downloadMsm(msm string, output_dir string, saveCache bool) []MsmDataRow {
 	}
 
 	if saveCache {
-		save_path := filepath.Join(output_dir, fmt.Sprintf("%s.parquet", msm))
 		log.Printf("MSMキャッシュ保存 %s", save_path)
-		if werr := os.WriteFile(save_path, body, os.ModePerm); werr != nil {
-			panic(werr)
+		// キャッシュの保存に失敗しても、ダウンロードしたデータで計算は続ける
+		if werr := writeFileAtomic(save_path, body); werr != nil {
+			log.Printf("警告: MSMキャッシュを保存できませんでした: %s: %v", save_path, werr)
 		}
 	}
 
